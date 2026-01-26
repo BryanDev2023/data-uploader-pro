@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Navigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,49 +10,53 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
-const loginSchema = z.object({
+const registerSchema = z.object({
+  fullName: z.string().min(2, 'El nombre completo es requerido'),
   email: z.string().email('Ingresa un correo electrónico válido'),
-  password: z.string().min(1, 'La contraseña es requerida'),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  confirmPassword: z.string().min(6, 'Confirma tu contraseña'),
+}).refine((values) => values.password === values.confirmPassword, {
+  message: 'Las contraseñas no coinciden',
+  path: ['confirmPassword'],
 });
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type RegisterFormValues = z.infer<typeof registerSchema>;
 
-const Login = () => {
+const Register = () => {
   const navigate = useNavigate();
-  const { login, isLoading, isAuthenticated } = useAuth();
+  const { register, isLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
+  const form = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
     defaultValues: {
+      fullName: '',
       email: '',
       password: '',
+      confirmPassword: '',
     },
   });
 
-  const onSubmit = async (data: LoginFormValues) => {
+  const onSubmit = async (data: RegisterFormValues) => {
     setError(null);
-    const success = await login(data.email, data.password);
-    
+    const success = await register(data.email, data.password, data.fullName);
+
     if (success) {
       navigate('/dashboard');
     } else {
-      setError('Credenciales incorrectas. Revisa tu correo y contraseña.');
+      setError('No se pudo crear la cuenta. Inténtalo de nuevo.');
     }
   };
-
-  if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
+          <CardTitle className="text-2xl">Crear Cuenta</CardTitle>
           <CardDescription>
-            Ingresa tus credenciales para acceder al sistema
+            Completa tus datos para comenzar
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -64,7 +68,25 @@ const Login = () => {
                   <span>{error}</span>
                 </div>
               )}
-              
+
+              <FormField
+                control={form.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre Completo</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="Tu nombre"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="email"
@@ -72,17 +94,17 @@ const Login = () => {
                   <FormItem>
                     <FormLabel>Correo Electrónico</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="email" 
-                        placeholder="admin@ejemplo.com" 
-                        {...field} 
+                      <Input
+                        type="email"
+                        placeholder="tu@email.com"
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="password"
@@ -91,11 +113,11 @@ const Login = () => {
                     <FormLabel>Contraseña</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Input 
-                          type={showPassword ? 'text' : 'password'} 
-                          placeholder="••••••••" 
+                        <Input
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
                           className="pr-10"
-                          {...field} 
+                          {...field}
                         />
                         <button
                           type="button"
@@ -112,23 +134,52 @@ const Login = () => {
                 )}
               />
 
+              <FormField
+                control={form.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirmar Contraseña</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          className="pr-10"
+                          {...field}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((prev) => !prev)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          aria-label={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        >
+                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Iniciando sesión...
+                    Creando cuenta...
                   </>
                 ) : (
-                  'Iniciar Sesión'
+                  'Crear Cuenta'
                 )}
               </Button>
             </form>
           </Form>
 
           <div className="mt-6 text-center text-sm text-muted-foreground">
-            ¿No tienes cuenta?{' '}
-            <Link to="/register" className="text-primary hover:underline">
-              Crear una nueva
+            ¿Ya tienes cuenta?{' '}
+            <Link to="/login" className="text-primary hover:underline">
+              Inicia sesión
             </Link>
           </div>
         </CardContent>
@@ -137,4 +188,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default Register;

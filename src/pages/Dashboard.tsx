@@ -54,7 +54,7 @@ const Dashboard = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h2 className="text-2xl font-semibold text-foreground">
-            Bienvenido, {user?.name}
+            Bienvenido, {user?.fullName}
           </h2>
           <p className="text-muted-foreground mt-1">
             Aquí tienes un resumen de la actividad del sistema
