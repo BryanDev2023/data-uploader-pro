@@ -1,39 +1,21 @@
 import { useState, useCallback } from 'react';
-import { Upload as UploadIcon, FileSpreadsheet, X, CheckCircle, AlertCircle, Loader2, Edit2, Save } from 'lucide-react';
+import { Upload as UploadIcon, FileSpreadsheet, X, CheckCircle, AlertCircle } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-
-interface CSVRecord {
-  id: number;
-  nombre: string;
-  email: string;
-  telefono: string;
-  isValid: boolean;
-  error?: string;
-  isEditing?: boolean;
-}
-
-// Datos simulados para la maqueta
-const mockCSVData: CSVRecord[] = [
-  { id: 1, nombre: 'Juan Pérez', email: 'juan@ejemplo.com', telefono: '555-1234', isValid: true },
-  { id: 2, nombre: 'María García', email: 'maria@ejemplo.com', telefono: '555-5678', isValid: true },
-  { id: 3, nombre: 'Carlos López', email: 'carlos-invalido', telefono: '555-9012', isValid: false, error: 'Email inválido' },
-  { id: 4, nombre: 'Ana Martínez', email: 'ana@ejemplo.com', telefono: '555-3456', isValid: true },
-  { id: 5, nombre: '', email: 'sin-nombre@ejemplo.com', telefono: '555-7890', isValid: false, error: 'Nombre requerido' },
-  { id: 6, nombre: 'Pedro Sánchez', email: 'pedro@ejemplo.com', telefono: '555-2345', isValid: true },
-];
+import csvUploaderService from '@/services/csv-uploader.service';
+import type { Csv, CsvError } from '@/types/csv';
 
 const Upload = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [records, setRecords] = useState<CSVRecord[]>([]);
+  const [successRecords, setSuccessRecords] = useState<Csv[]>([]);
+  const [errorRecords, setErrorRecords] = useState<CsvError[]>([]);
   const [isProcessed, setIsProcessed] = useState(false);
   const { toast } = useToast();
 
@@ -73,92 +55,42 @@ const Upload = () => {
     if (!file) return;
 
     setIsUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(10);
 
-    // Simular progreso de carga
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise(resolve => setTimeout(resolve, 150));
-      setUploadProgress(i);
-    }
-
-    // Simular procesamiento
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setRecords(mockCSVData);
-    setIsProcessed(true);
-    setIsUploading(false);
-
-    toast({
-      title: 'Archivo procesado',
-      description: `Se encontraron ${mockCSVData.length} registros`,
-    });
-  };
-
-  const handleEdit = (id: number) => {
-    setRecords(prev => prev.map(r => 
-      r.id === id ? { ...r, isEditing: true } : r
-    ));
-  };
-
-  const handleSaveEdit = (id: number, field: keyof CSVRecord, value: string) => {
-    setRecords(prev => prev.map(r => {
-      if (r.id === id) {
-        const updated = { ...r, [field]: value, isEditing: false };
-        // Simulación de re-validación
-        if (field === 'email' && value.includes('@')) {
-          updated.isValid = true;
-          updated.error = undefined;
-        }
-        if (field === 'nombre' && value.trim()) {
-          updated.isValid = true;
-          updated.error = undefined;
-        }
-        return updated;
-      }
-      return r;
-    }));
-    
-    toast({
-      title: 'Registro actualizado',
-      description: 'El registro ha sido corregido correctamente',
-    });
-  };
-
-  const handleConfirmUpload = async () => {
-    const invalidCount = records.filter(r => !r.isValid).length;
-    
-    if (invalidCount > 0) {
+    try {
+      const response = await csvUploaderService.uploadCsv(file);
+      setUploadProgress(90);
+      setSuccessRecords(response.success);
+      setErrorRecords(response.errors);
+      setIsProcessed(true);
+      setUploadProgress(100);
       toast({
-        title: 'Registros inválidos',
-        description: `Aún hay ${invalidCount} registros con errores`,
+        title: 'Archivo procesado',
+        description: `Exitosos: ${response.success.length}, con errores: ${response.errors.length}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo procesar el archivo';
+      toast({
+        title: 'Error al procesar',
+        description: message,
         variant: 'destructive',
       });
-      return;
+    } finally {
+      setIsUploading(false);
     }
-
-    setIsUploading(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsUploading(false);
-
-    toast({
-      title: '¡Carga exitosa!',
-      description: `${records.length} registros han sido guardados correctamente`,
-    });
-
-    // Reset state
-    setFile(null);
-    setRecords([]);
-    setIsProcessed(false);
   };
 
   const handleClear = () => {
     setFile(null);
-    setRecords([]);
+    setSuccessRecords([]);
+    setErrorRecords([]);
     setIsProcessed(false);
     setUploadProgress(0);
   };
 
-  const validCount = records.filter(r => r.isValid).length;
-  const invalidCount = records.filter(r => !r.isValid).length;
+  const validCount = successRecords.length;
+  const invalidCount = errorRecords.length;
+  const totalCount = validCount + invalidCount;
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -262,7 +194,7 @@ const Upload = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm text-muted-foreground">Total Registros</p>
-                        <p className="text-2xl font-bold">{records.length}</p>
+                        <p className="text-2xl font-bold">{totalCount}</p>
                       </div>
                       <FileSpreadsheet className="h-8 w-8 text-muted-foreground" />
                     </div>
@@ -292,116 +224,88 @@ const Upload = () => {
                 </Card>
               </div>
 
-              {/* Data Table */}
+              {/* Resultados */}
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle>Vista Previa de Datos</CardTitle>
+                      <CardTitle>Resultados del Procesamiento</CardTitle>
                       <CardDescription>
-                        Revisa y corrige los registros antes de confirmar la carga
+                        Revisa los registros cargados y los errores encontrados
                       </CardDescription>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={handleClear}>
-                        Cancelar
-                      </Button>
-                      <Button onClick={handleConfirmUpload} disabled={isUploading}>
-                        {isUploading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Guardando...
-                          </>
-                        ) : (
-                          'Confirmar Carga'
-                        )}
+                      <Button variant="outline" onClick={handleClear} disabled={isUploading}>
+                        Cargar otro archivo
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12">Estado</TableHead>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Teléfono</TableHead>
-                        <TableHead className="w-24">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {records.map((record) => (
-                        <TableRow key={record.id} className={!record.isValid ? 'bg-destructive/5' : ''}>
-                          <TableCell>
-                            {record.isValid ? (
-                              <CheckCircle className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <div className="flex items-center gap-1">
-                                <AlertCircle className="h-4 w-4 text-amber-600" />
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {record.isEditing ? (
-                              <Input
-                                defaultValue={record.nombre}
-                                className="h-8"
-                                onBlur={(e) => handleSaveEdit(record.id, 'nombre', e.target.value)}
-                                autoFocus
-                              />
-                            ) : (
-                              <div>
-                                <span>{record.nombre || <span className="text-muted-foreground italic">Vacío</span>}</span>
-                                {record.error?.includes('Nombre') && (
-                                  <p className="text-xs text-destructive">{record.error}</p>
-                                )}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {record.isEditing ? (
-                              <Input
-                                defaultValue={record.email}
-                                className="h-8"
-                                onBlur={(e) => handleSaveEdit(record.id, 'email', e.target.value)}
-                              />
-                            ) : (
-                              <div>
-                                <span>{record.email}</span>
-                                {record.error?.includes('Email') && (
-                                  <p className="text-xs text-destructive">{record.error}</p>
-                                )}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>{record.telefono}</TableCell>
-                          <TableCell>
-                            {!record.isValid && !record.isEditing && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleEdit(record.id)}
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {record.isEditing && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setRecords(prev => prev.map(r => 
-                                  r.id === record.id ? { ...r, isEditing: false } : r
-                                ))}
-                              >
-                                <Save className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Registros exitosos</h3>
+                      {successRecords.length === 0 ? (
+                        <p className="text-sm text-muted-foreground mt-2">No hay registros exitosos.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Nombre</TableHead>
+                              <TableHead>Email</TableHead>
+                              <TableHead>Edad</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {successRecords.map((record) => (
+                              <TableRow key={record.id}>
+                                <TableCell>{record.name}</TableCell>
+                                <TableCell>{record.email}</TableCell>
+                                <TableCell>{record.age}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Registros con errores</h3>
+                      {errorRecords.length === 0 ? (
+                        <p className="text-sm text-muted-foreground mt-2">No hay errores en el archivo.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-24">Fila</TableHead>
+                              <TableHead>Detalles</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {errorRecords.map((error, index) => (
+                              <TableRow key={`${error.row}-${index}`} className="bg-destructive/5">
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                                    <span>{error.row}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="space-y-1">
+                                    {Object.entries(error.details).map(([field, message]) => (
+                                      <p key={`${error.row}-${field}`} className="text-sm text-destructive">
+                                        {field}: {message}
+                                      </p>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </>

@@ -1,51 +1,113 @@
-import { FileSpreadsheet, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+import { FileSpreadsheet, CheckCircle, AlertTriangle, Clock, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Header from '@/components/layout/Header';
-
-const stats = [
-  {
-    title: 'Registros Cargados',
-    value: '1,248',
-    description: 'Total de registros en el sistema',
-    icon: FileSpreadsheet,
-    color: 'text-primary',
-  },
-  {
-    title: 'Registros Válidos',
-    value: '1,180',
-    description: '94.5% de tasa de éxito',
-    icon: CheckCircle,
-    color: 'text-green-600',
-  },
-  {
-    title: 'Registros con Errores',
-    value: '68',
-    description: 'Pendientes de corrección',
-    icon: AlertTriangle,
-    color: 'text-amber-600',
-  },
-  {
-    title: 'Última Carga',
-    value: 'Hace 2h',
-    description: '21 de enero, 2026',
-    icon: Clock,
-    color: 'text-muted-foreground',
-  },
-];
-
-const recentUploads = [
-  { id: 1, filename: 'clientes_enero.csv', records: 245, status: 'success', date: '21 Ene 2026' },
-  { id: 2, filename: 'productos_lote3.csv', records: 89, status: 'partial', date: '20 Ene 2026' },
-  { id: 3, filename: 'inventario_2026.csv', records: 512, status: 'success', date: '19 Ene 2026' },
-  { id: 4, filename: 'ventas_q1.csv', records: 402, status: 'success', date: '18 Ene 2026' },
-];
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import csvUploaderService from '@/services/csv-uploader.service';
+import type { Csv, CsvUploadRecord } from '@/types/csv';
 
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [allRecords, setAllRecords] = useState<Csv[]>([]);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
+  const [failedUploads, setFailedUploads] = useState<CsvUploadRecord[]>([]);
+  const [isLoadingFailed, setIsLoadingFailed] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadAllCsvs = async () => {
+      setIsLoadingAll(true);
+      try {
+        const data = await csvUploaderService.getAllCsvs();
+        if (isMounted) {
+          setAllRecords(data);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setAllRecords([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingAll(false);
+        }
+      }
+    };
+    const loadFailedUploads = async () => {
+      setIsLoadingFailed(true);
+      try {
+        const data = await csvUploaderService.getFailedUploads();
+        if (isMounted) {
+          setFailedUploads(data);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setFailedUploads([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingFailed(false);
+        }
+      }
+    };
+    loadAllCsvs();
+    loadFailedUploads();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const totalRecords = allRecords.length;
+  const validRecords = totalRecords;
+  const errorRecords = failedUploads.reduce((acc, record) => acc + record.errorCount, 0);
+  const successRate = totalRecords > 0 ? ((validRecords / totalRecords) * 100).toFixed(1) : '0.0';
+  const lastFailedUpload = failedUploads
+    .map((record) => new Date(record.created_at))
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  const lastUploadLabel = lastFailedUpload
+    ? lastFailedUpload.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })
+    : 'Sin datos';
+
+  const handleScrollToErrors = useCallback(() => {
+    const target = document.getElementById('errores-dashboard');
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  const stats = [
+    {
+      title: 'Registros Cargados',
+      value: totalRecords.toLocaleString(),
+      description: 'Total de registros en el sistema',
+      icon: FileSpreadsheet,
+      color: 'text-primary',
+    },
+    {
+      title: 'Registros Válidos',
+      value: validRecords.toLocaleString(),
+      description: `${successRate}% de tasa de éxito`,
+      icon: CheckCircle,
+      color: 'text-green-600',
+    },
+    {
+      title: 'Registros con Errores',
+      value: errorRecords.toLocaleString(),
+      description: 'Pendientes de corrección',
+      icon: AlertTriangle,
+      color: 'text-amber-600',
+    },
+    {
+      title: 'Última Carga',
+      value: lastUploadLabel,
+      description: failedUploads.length > 0 ? 'Fecha de la última carga con error' : 'Aún no hay cargas con error',
+      icon: Clock,
+      color: 'text-muted-foreground',
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -96,7 +158,12 @@ const Dashboard = () => {
                 <FileSpreadsheet className="h-4 w-4" />
                 Cargar nuevo archivo CSV
               </Button>
-              <Button variant="outline" className="w-full justify-start gap-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={handleScrollToErrors}
+                disabled={isLoadingFailed || failedUploads.length === 0}
+              >
                 <AlertTriangle className="h-4 w-4" />
                 Ver registros con errores
               </Button>
@@ -105,35 +172,108 @@ const Dashboard = () => {
 
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>Cargas Recientes</CardTitle>
-              <CardDescription>Últimos archivos procesados</CardDescription>
+              <CardTitle>Registros Cargados</CardTitle>
+              <CardDescription>Listado de registros procesados</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {recentUploads.map((upload) => (
-                  <div 
-                    key={upload.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                  >
-                    <div className="flex items-center gap-3">
-                      <FileSpreadsheet className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium">{upload.filename}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {upload.records} registros • {upload.date}
-                        </p>
+              {isLoadingAll ? (
+                <div className="flex items-center text-sm text-muted-foreground gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Cargando registros...
+                </div>
+              ) : allRecords.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No hay registros cargados aún.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Edad</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allRecords.map((record) => (
+                      <TableRow key={record.id}>
+                        <TableCell>{record.name}</TableCell>
+                        <TableCell>{record.email}</TableCell>
+                        <TableCell>{record.age}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mt-6" id="errores-dashboard">
+          <Card>
+            <CardHeader>
+              <CardTitle>Archivos con errores</CardTitle>
+              <CardDescription>
+                Detalle completo de los archivos que fallaron o están incompletos
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingFailed ? (
+                <div className="flex items-center text-sm text-muted-foreground gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Cargando errores...
+                </div>
+              ) : failedUploads.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No hay archivos con errores.</p>
+              ) : (
+                <div className="space-y-6">
+                  {failedUploads.map((record) => (
+                    <div key={record._id} className="rounded-lg border border-destructive/20 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">{record.originalName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {record.errorCount} errores • {record.totalRows} filas • {record.successCount} exitosos
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Tipo: {record.mimeType} • Tamaño: {(record.size / 1024).toFixed(2)} KB
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Creado: {new Date(record.created_at).toLocaleString('es-ES')}
+                          </p>
+                        </div>
+                        <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-1 rounded">
+                          {record.status}
+                        </span>
                       </div>
+                      {record.errors.length > 0 && (
+                        <Table className="mt-3">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-24">Fila</TableHead>
+                              <TableHead>Detalles</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {record.errors.map((error, index) => (
+                              <TableRow key={`${record._id}-${error.row}-${index}`} className="bg-destructive/5">
+                                <TableCell>{error.row}</TableCell>
+                                <TableCell>
+                                  <div className="space-y-1">
+                                    {Object.entries(error.details).map(([field, message]) => (
+                                      <p key={`${record._id}-${error.row}-${field}`} className="text-sm text-destructive">
+                                        {field}: {message}
+                                      </p>
+                                    ))}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
                     </div>
-                    <div className={`px-2 py-1 rounded text-xs font-medium ${
-                      upload.status === 'success' 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {upload.status === 'success' ? 'Completado' : 'Parcial'}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

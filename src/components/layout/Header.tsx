@@ -1,4 +1,4 @@
-import { LogOut, Upload, LayoutDashboard, User } from 'lucide-react';
+import { LogOut, Upload, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -20,18 +20,15 @@ const Header = () => {
     <header className="border-b bg-background">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-8">
-          <h1 className="text-xl font-semibold text-foreground">DataLoader</h1>
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard')}
+            className="text-xl font-semibold text-foreground hover:text-foreground/90"
+          >
+            DataLoader
+          </button>
           
           <nav className="hidden md:flex items-center gap-1">
-            <Button
-              variant={isActive('/dashboard') ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => navigate('/dashboard')}
-              className="gap-2"
-            >
-              <LayoutDashboard className="h-4 w-4" />
-              Dashboard
-            </Button>
             {user?.role === 'admin' && (
               <Button
                 variant={isActive('/upload') ? 'secondary' : 'ghost'}

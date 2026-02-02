@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { useTheme } from 'next-themes';
 import authService from '@/services/auth.service';
 import userService from '@/services/user.service';
-import { User } from '@/models/interfaces/user.interface';
-import { UserPreferences } from '@/models/interfaces/user.interface';
+import { User } from '@/types/user';
+import { UserPreferences } from '@/types/user';
 
 interface AuthContextType {
   user: User | null;

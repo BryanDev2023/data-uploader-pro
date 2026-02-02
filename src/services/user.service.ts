@@ -1,4 +1,4 @@
-import { UpdateUserResponse, User } from "@/models/interfaces/user.interface";
+import { UpdateUserResponse, User } from "@/types/user";
 import api from "./api.service";
 
 const userService = {

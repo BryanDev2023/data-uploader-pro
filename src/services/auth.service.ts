@@ -1,6 +1,6 @@
-import { ChangePasswordResponse, LoginResponse, LogoutResponse } from "@/models/interfaces/auth.interface";
+import { ChangePasswordResponse, LoginResponse, LogoutResponse } from "@/types/auth";
 import api from "./api.service";
-import { User } from "@/models/interfaces/user.interface";
+import { User } from "@/types/user";
 
 const authService = {
     login: async (email: string, password: string): Promise<LoginResponse> => {
