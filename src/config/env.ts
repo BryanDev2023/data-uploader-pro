@@ -1,9 +1,12 @@
 const normalizeApiBaseUrl = (value: string) => {
     const trimmed = value.replace(/\/+$/, '');
+    if (trimmed.endsWith('/api/v1')) {
+        return trimmed;
+    }
     if (trimmed.endsWith('/api')) {
         return `${trimmed}/v1`;
     }
-    return trimmed;
+    return `${trimmed}/api/v1`;
 };
 
 const envConfig = {
