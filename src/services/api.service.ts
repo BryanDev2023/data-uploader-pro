@@ -1,7 +1,7 @@
 
 import envConfig from '@/config/env';
 
-const BASE_URL = envConfig.apiBaseUrl;  
+const BASE_URL = envConfig.socketUrl;  
 
 
 interface RequestOptions extends RequestInit {
