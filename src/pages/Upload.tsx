@@ -1,15 +1,17 @@
 import { useState, useCallback } from 'react';
-import { Upload as UploadIcon, FileSpreadsheet, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload as UploadIcon, FileSpreadsheet, X, CheckCircle, AlertCircle, Pencil, Save } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import csvUploaderService from '@/services/csv-uploader.service';
 import type { Csv, CsvError } from '@/types/csv';
 
 const Upload = () => {
+  const getCsvId = (record: Csv): string => record.id ?? record._id ?? '';
   const [isDragOver, setIsDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -17,6 +19,9 @@ const Upload = () => {
   const [successRecords, setSuccessRecords] = useState<Csv[]>([]);
   const [errorRecords, setErrorRecords] = useState<CsvError[]>([]);
   const [isProcessed, setIsProcessed] = useState(false);
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [editingForm, setEditingForm] = useState({ name: '', email: '', age: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const { toast } = useToast();
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -86,6 +91,66 @@ const Upload = () => {
     setErrorRecords([]);
     setIsProcessed(false);
     setUploadProgress(0);
+    setEditingRecordId(null);
+    setEditingForm({ name: '', email: '' , age: '' });
+    setIsSavingEdit(false);
+  };
+
+  const startEdit = (record: Csv) => {
+    setEditingRecordId(getCsvId(record));
+    setEditingForm({
+      name: record.name,
+      email: record.email,
+      age: String(record.age),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingRecordId(null);
+    setEditingForm({ name: '', email: '', age: '' });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRecordId) return;
+
+    const trimmedName = editingForm.name.trim();
+    const trimmedEmail = editingForm.email.trim();
+    const parsedAge = Number(editingForm.age);
+
+    if (!trimmedName || !trimmedEmail || Number.isNaN(parsedAge) || parsedAge <= 0) {
+      toast({
+        title: 'Datos inválidos',
+        description: 'Debes ingresar nombre, email y una edad mayor a 0.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsSavingEdit(true);
+      const updatedRecord = await csvUploaderService.updateCsv(editingRecordId, {
+        name: trimmedName,
+        email: trimmedEmail,
+        age: parsedAge,
+      });
+      setSuccessRecords((prev) =>
+        prev.map((record) => (getCsvId(record) === editingRecordId ? updatedRecord : record))
+      );
+      toast({
+        title: 'Registro actualizado',
+        description: 'Los campos del registro se guardaron correctamente.',
+      });
+      cancelEdit();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo actualizar el registro';
+      toast({
+        title: 'Error al actualizar',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const validCount = successRecords.length;
@@ -254,14 +319,72 @@ const Upload = () => {
                               <TableHead>Nombre</TableHead>
                               <TableHead>Email</TableHead>
                               <TableHead>Edad</TableHead>
+                              <TableHead className="w-36 text-right">Acciones</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {successRecords.map((record) => (
-                              <TableRow key={record.id}>
-                                <TableCell>{record.name}</TableCell>
-                                <TableCell>{record.email}</TableCell>
-                                <TableCell>{record.age}</TableCell>
+                              <TableRow key={getCsvId(record) || `${record.email}-${record.name}`}>
+                                <TableCell>
+                                  {editingRecordId === getCsvId(record) ? (
+                                    <Input
+                                      value={editingForm.name}
+                                      onChange={(e) => setEditingForm((prev) => ({ ...prev, name: e.target.value }))}
+                                      disabled={isSavingEdit}
+                                    />
+                                  ) : (
+                                    record.name
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {editingRecordId === getCsvId(record) ? (
+                                    <Input
+                                      value={editingForm.email}
+                                      onChange={(e) => setEditingForm((prev) => ({ ...prev, email: e.target.value }))}
+                                      disabled={isSavingEdit}
+                                    />
+                                  ) : (
+                                    record.email
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {editingRecordId === getCsvId(record) ? (
+                                    <Input
+                                      type="number"
+                                      min={1}
+                                      value={editingForm.age}
+                                      onChange={(e) => setEditingForm((prev) => ({ ...prev, age: e.target.value }))}
+                                      disabled={isSavingEdit}
+                                    />
+                                  ) : (
+                                    record.age
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex justify-end gap-2">
+                                    {editingRecordId === getCsvId(record) ? (
+                                      <>
+                                        <Button size="sm" onClick={handleSaveEdit} disabled={isSavingEdit}>
+                                          <Save className="h-4 w-4 mr-1" />
+                                          Guardar
+                                        </Button>
+                                        <Button size="sm" variant="outline" onClick={cancelEdit} disabled={isSavingEdit}>
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => startEdit(record)}
+                                        disabled={Boolean(editingRecordId)}
+                                      >
+                                        <Pencil className="h-4 w-4 mr-1" />
+                                        Editar
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>

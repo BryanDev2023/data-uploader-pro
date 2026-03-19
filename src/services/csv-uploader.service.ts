@@ -1,4 +1,4 @@
-import { Csv, CsvUploadResponse, CsvUploadRecord } from "@/types/csv";
+import { Csv, CsvUploadResponse, CsvUploadRecord, UpdateCsvPayload } from "@/types/csv";
 import api from "./api.service";
 
 const csvUploaderService = {
@@ -23,7 +23,20 @@ const csvUploaderService = {
     }
     return response.data;
   },
-  
+  updateCsv: async (csvId: string, payload: UpdateCsvPayload): Promise<Csv> => {
+    const response = await api.patch(`/csv-uploader/${csvId}`, payload);
+    if (!response.data) {
+      throw new Error(response.message);
+    }
+    return response.data;
+  },
+  deleteCsv: async (csvId: string): Promise<void> => {
+    const response = await api.delete(`/csv-uploader/${csvId}`);
+    if (!response.data) {
+      throw new Error(response.message);
+    }
+    return response.data;
+  }
 }
 
 export default csvUploaderService;

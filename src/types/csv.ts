@@ -1,5 +1,12 @@
 export interface Csv {
-  id: string;
+  id?: string;
+  _id?: string;
+  name: string;
+  email: string;
+  age: number;
+}
+
+export interface UpdateCsvPayload {
   name: string;
   email: string;
   age: number;
